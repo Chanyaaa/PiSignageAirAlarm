@@ -36,8 +36,7 @@ def main():
                         env("PISIGNAGE_PASSWORD", "pi"))
     switcher = Switcher(signage, env("STATE_FILE", "state.json"),
                         {"red": env("ALARM_PLAYLIST", "ALARM"),
-                         "yellow": env("YELLOW_PLAYLIST", "ALARM_YELLOW")},
-                        max_seconds=int(env("MAX_ALARM_SECONDS", "0")))
+                         "yellow": env("YELLOW_PLAYLIST", "ALARM_YELLOW")})
 
     if args.set:
         switcher.apply(None if args.set == "off" else args.set)

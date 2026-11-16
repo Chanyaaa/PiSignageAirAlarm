@@ -95,29 +95,46 @@ class SwitcherTest(unittest.TestCase):
         self.assertEqual(self.signage.groups["g1"]["playlists"],
                          self.original["playlists"])
 
-    def switcher_with_limit(self, seconds, now):
+    def switcher_with_clock(self, now):
         return Switcher(self.signage, self.state,
                         {"red": ALARM, "yellow": YELLOW},
-                        max_seconds=seconds, clock=lambda: now[0])
+                        clock=lambda: now[0])
 
-    def test_alarm_goes_back_to_normal_after_max_seconds(self):
+    def test_alarm_goes_back_to_normal_when_the_playlist_has_run(self):
         now = [0]
-        s = self.switcher_with_limit(30, now)
+        s = self.switcher_with_clock(now)
         s.apply("red")
-        now[0] = 20
+        now[0] = 5
         s.apply("red")
         self.assertEqual(self.shown(), [ALARM])
 
-        now[0] = 31
+        now[0] = 10
+        s.apply("red")
+        self.assertEqual(self.signage.groups["g1"]["playlists"],
+                         self.original["playlists"])
+
+    def test_the_limit_is_the_sum_of_the_asset_durations(self):
+        self.signage.playlists[ALARM]["assets"] = [
+            {"filename": "a.png", "duration": 4},
+            {"filename": "b.png", "duration": 6},
+        ]
+        now = [0]
+        s = self.switcher_with_clock(now)
+        s.apply("red")
+        now[0] = 9
+        s.apply("red")
+        self.assertEqual(self.shown(), [ALARM])
+
+        now[0] = 10
         s.apply("red")
         self.assertEqual(self.signage.groups["g1"]["playlists"],
                          self.original["playlists"])
 
     def test_expired_alarm_stays_off_without_api_calls(self):
         now = [0]
-        s = self.switcher_with_limit(30, now)
+        s = self.switcher_with_clock(now)
         s.apply("red")
-        now[0] = 31
+        now[0] = 10
         s.apply("red")
         self.signage.api_calls.clear()
 
@@ -129,17 +146,18 @@ class SwitcherTest(unittest.TestCase):
 
     def test_a_new_alert_after_all_clear_shows_the_alarm_again(self):
         now = [0]
-        s = self.switcher_with_limit(30, now)
+        s = self.switcher_with_clock(now)
         s.apply("red")
-        now[0] = 31
+        now[0] = 10
         s.apply("red")
         s.apply(None)
         s.apply("red")
         self.assertEqual(self.shown(), [ALARM])
 
-    def test_without_a_limit_the_alarm_stays_on(self):
+    def test_a_playlist_without_durations_has_no_limit(self):
+        self.signage.playlists[ALARM]["assets"] = [{"filename": "a.png"}]
         now = [0]
-        s = self.switcher_with_limit(0, now)
+        s = self.switcher_with_clock(now)
         s.apply("red")
         now[0] = 10000
         s.apply("red")

@@ -14,6 +14,8 @@ The service switches groups instead of sending players a playlist directly, beca
 
 Any active alert type counts (air raid, artillery, and so on). The level comes from the alert's `activeAlertLevels` field in the API response. An alert is yellow only when all its levels are `Yellow`; an alert with no level or an unknown one is treated as red. If yellow and red alerts are active at once, the red playlist wins.
 
+An alert shows its playlist for one pass of it: the sum of its assets' `duration` values, in seconds. For example, two images with 10 seconds each give 20 seconds. After that the normal content comes back, even if the alert is still active, and stays until the level changes or the alert ends. A playlist without durations has no limit.
+
 The yellow playlist is optional. If `YELLOW_PLAYLIST` does not exist in piSignage, a yellow alert leaves the normal content on screen. When the level changes from yellow to red or back, the playlist changes on the next poll.
 
 ## Requirements
@@ -32,7 +34,6 @@ The yellow playlist is optional. If `YELLOW_PLAYLIST` does not exist in piSignag
    | `UKRAINEALARM_API_KEY` | none | UkraineAlarm API key |
    | `REGION_ID` | none | Region to watch. Look up its id in `GET /api/v3/regions` (send the API key in the `Authorization` header). |
    | `ALARM_PLAYLIST` | `ALARM` | piSignage playlist shown during a red alert |
-   | `MAX_ALARM_SECONDS` | `0` | Longest time the alarm playlist stays on for one alert, in seconds. Then the normal content comes back until the level changes or the alert ends. `0` means no limit. |
    | `YELLOW_PLAYLIST` | `ALARM_YELLOW` | piSignage playlist shown during a yellow alert (optional) |
    | `POLL_SECONDS` | `30` | Poll interval. UkraineAlarm rate-limits hard, so keep it at 30 or more. |
    | `PISIGNAGE_URL` | `http://127.0.0.1:3000` | piSignage server |

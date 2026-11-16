@@ -18,39 +18,37 @@ ZONES = ("side", "bottom", "zone4", "zone5", "zone6")
 
 
 class Switcher:
-    def __init__(self, signage, state_path, playlists, max_seconds=0,
-                 clock=time.monotonic):
+    def __init__(self, signage, state_path, playlists, clock=time.monotonic):
         """playlists maps an alert level ("red", "yellow") to a playlist name.
 
         A playlist that does not exist on piSignage is skipped: the groups are
         left alone (or restored), so a missing playlist costs no deploys.
 
-        max_seconds caps how long the alarm playlist stays on for one alert
-        (0 means no cap). After that the groups are restored until the level
+        One alert shows its playlist for as long as one pass of it takes: the
+        sum of its assets' durations, in seconds. A playlist without durations
+        has no limit. After that the groups are restored until the level
         changes or the alert ends.
         """
         self.signage = signage
         self.state_path = state_path
         self.playlists = playlists
-        self.max_seconds = max_seconds
         self.clock = clock
         self._level = None
         self._since = None
+        self._limit = None
         self._expired = False
 
     def apply(self, level):
         """Show the playlist for level ("red", "yellow"), or restore on None."""
         if level is None:
             self._level = None
+            self._limit = None
             self._expired = False
             return self._restore()
         if level != self._level:
             self._level = level
-            self._since = self.clock()
+            self._limit = None
             self._expired = False
-        if (not self._expired and self.max_seconds
-                and self.clock() - self._since >= self.max_seconds):
-            self._expired = True
         if self._expired:
             return self._restore()
         name = self.playlists[level]
@@ -58,6 +56,13 @@ class Switcher:
             playlist = self.signage.get_playlist(name)
         except LookupError:
             log.warning("playlist %r not found on piSignage, not switching", name)
+            return self._restore()
+        if self._limit is None:
+            self._since = self.clock()
+            self._limit = sum(float(a.get("duration") or 0)
+                              for a in playlist.get("assets") or [])
+        if self._limit and self.clock() - self._since >= self._limit:
+            self._expired = True
             return self._restore()
         self._switch_to(name, playlist)
 
