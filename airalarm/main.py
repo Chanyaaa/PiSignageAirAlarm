@@ -1,8 +1,9 @@
-"""Poll UkraineAlarm and switch piSignage groups to the alarm playlist.
+"""Poll UkraineAlarm and switch piSignage groups to the red/yellow alarm playlist.
 
-    python -m airalarm.main            # run forever
-    python -m airalarm.main --set on   # switch to alarm now (manual test)
-    python -m airalarm.main --set off  # restore now
+    python -m airalarm.main                # run forever
+    python -m airalarm.main --set red      # show the red playlist now (manual test)
+    python -m airalarm.main --set yellow   # show the yellow playlist now
+    python -m airalarm.main --set off      # restore now
 """
 import argparse
 import logging
@@ -11,7 +12,7 @@ import time
 
 from airalarm.pisignage import PiSignage
 from airalarm.switcher import Switcher
-from airalarm.ukrainealarm import fetch_region_alerts, is_alert_active
+from airalarm.ukrainealarm import alert_level, fetch_region_alerts
 
 log = logging.getLogger("airalarm")
 
@@ -25,7 +26,7 @@ def env(name, default=None):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--set", choices=["on", "off"])
+    parser.add_argument("--set", choices=["red", "yellow", "off"])
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s %(levelname)s %(message)s")
@@ -34,25 +35,26 @@ def main():
                         env("PISIGNAGE_USER", "pi"),
                         env("PISIGNAGE_PASSWORD", "pi"))
     switcher = Switcher(signage, env("STATE_FILE", "state.json"),
-                        env("ALARM_PLAYLIST", "ALARM"))
+                        {"red": env("ALARM_PLAYLIST", "ALARM"),
+                         "yellow": env("YELLOW_PLAYLIST", "ALARM_YELLOW")})
 
     if args.set:
-        switcher.apply(alarm=args.set == "on")
-        log.info("applied alarm=%s", args.set)
+        switcher.apply(None if args.set == "off" else args.set)
+        log.info("applied %s", args.set)
         return
 
     api_key = env("UKRAINEALARM_API_KEY")
     region = env("REGION_ID")
     poll = int(env("POLL_SECONDS", "30"))
     log.info("watching region %s every %ss", region, poll)
-    last = None
+    last = "unknown"
     while True:
         try:
-            alarm = is_alert_active(fetch_region_alerts(api_key, region))
-            if alarm != last:
-                log.info("alarm %s", "ON" if alarm else "OFF")
-            switcher.apply(alarm)
-            last = alarm
+            level = alert_level(fetch_region_alerts(api_key, region))
+            if level != last:
+                log.info("alarm %s", (level or "off").upper())
+            switcher.apply(level)
+            last = level
         except Exception as e:  # keep running; retry on next poll
             log.warning("poll failed: %s", e)
         time.sleep(poll)

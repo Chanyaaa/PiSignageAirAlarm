@@ -14,25 +14,36 @@ ZONES = ("side", "bottom", "zone4", "zone5", "zone6")
 
 
 class Switcher:
-    def __init__(self, signage, state_path, alarm_playlist):
+    def __init__(self, signage, state_path, playlists):
+        """playlists maps an alert level ("red", "yellow") to a playlist name.
+
+        The red playlist must exist on piSignage. The yellow one is optional:
+        without it a yellow alert leaves the normal content on screen.
+        """
         self.signage = signage
         self.state_path = state_path
-        self.alarm = alarm_playlist
+        self.playlists = playlists
 
-    def apply(self, alarm):
-        if alarm:
-            self._switch_to_alarm()
-        else:
-            self._restore()
+    def apply(self, level):
+        """Show the playlist for level ("red", "yellow"), or restore on None."""
+        if level is None:
+            return self._restore()
+        name = self.playlists[level]
+        try:
+            playlist = self.signage.get_playlist(name)
+        except LookupError:
+            if level == "red":
+                raise
+            return self._restore()
+        self._switch_to(name, playlist)
 
-    def _switch_to_alarm(self):
-        playlist = self.signage.get_playlist(self.alarm)
-        entry, files = self._alarm_entry(playlist)
+    def _switch_to(self, name, playlist):
+        entry, files = self._alarm_entry(name, playlist)
         saved = self._load()
         for group in self.signage.list_groups():
             gid = group["_id"]
             current = [p.get("name") for p in group.get("playlists") or []]
-            if current == [self.alarm]:
+            if current == [name]:
                 continue
             if gid not in saved:
                 # Persist the original before touching the group, so a crash
@@ -65,18 +76,18 @@ class Switcher:
             json.dump({"groups": groups}, f, ensure_ascii=False, indent=2)
         os.replace(tmp, self.state_path)
 
-    def _alarm_entry(self, playlist):
+    def _alarm_entry(self, name, playlist):
         files = []
         for asset in playlist.get("assets") or []:
-            for name in [asset.get("filename")] + [asset.get(z) for z in ZONES]:
-                if name and not name.startswith("_system") and name not in files:
-                    files.append(name)
-        files.append(f"__{self.alarm}.json")
+            for f in [asset.get("filename")] + [asset.get(z) for z in ZONES]:
+                if f and not f.startswith("_system") and f not in files:
+                    files.append(f)
+        files.append(f"__{name}.json")
         if playlist.get("templateName"):
             files.append(playlist["templateName"])
         settings = playlist.get("settings") or {}
         entry = {
-            "name": self.alarm,
+            "name": name,
             "skipForSchedule": False,
             "plType": "regular",
             "settings": {k: settings.get(k) for k in ("ads", "audio")},

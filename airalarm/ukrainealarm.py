@@ -5,16 +5,26 @@ import urllib.request
 API = "https://api.ukrainealarm.com/api/v3"
 
 
-def is_alert_active(response):
-    """True if GET /alerts/{regionId} reports any active alert for the region."""
+def alert_level(response):
+    """Alert level GET /alerts/{regionId} reports: None, "yellow" or "red".
+
+    "yellow" only when every active alert is marked Yellow; an alert with no
+    level or an unknown one counts as red, so nothing is missed.
+    """
     if not isinstance(response, list):
         raise ValueError(f"unexpected UkraineAlarm response: {response!r}")
+    levels = set()
     for region in response:
         if not isinstance(region, dict) or "activeAlerts" not in region:
             raise ValueError(f"unexpected UkraineAlarm region: {region!r}")
-        if region["activeAlerts"]:
-            return True
-    return False
+        for alert in region["activeAlerts"]:
+            marks = [str(m.get("alertLevel", "")).lower()
+                     for m in alert.get("activeAlertLevels") or []]
+            levels.add("yellow" if marks and all(m == "yellow" for m in marks)
+                       else "red")
+    if "red" in levels:
+        return "red"
+    return "yellow" if levels else None
 
 
 def fetch_region_alerts(api_key, region_id, timeout=15):
