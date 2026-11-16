@@ -1,0 +1,11 @@
+services:
+  airalarm:
+    build: .
+    container_name: pisignage-airalarm
+    restart: unless-stopped
+    network_mode: host          # reaches piSignage at 127.0.0.1:3000
+    env_file: .env
+    environment:
+      - TZ=Europe/Kiev
+    volumes:
+      - ./data:/data            # state.json: groups' playlists saved during an alarm
