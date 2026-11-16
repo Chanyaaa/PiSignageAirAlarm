@@ -32,6 +32,7 @@ The yellow playlist is optional. If `YELLOW_PLAYLIST` does not exist in piSignag
    | `UKRAINEALARM_API_KEY` | none | UkraineAlarm API key |
    | `REGION_ID` | none | Region to watch. Look up its id in `GET /api/v3/regions` (send the API key in the `Authorization` header). |
    | `ALARM_PLAYLIST` | `ALARM` | piSignage playlist shown during a red alert |
+   | `MAX_ALARM_SECONDS` | `0` | Longest time the alarm playlist stays on for one alert, in seconds. Then the normal content comes back until the level changes or the alert ends. `0` means no limit. |
    | `YELLOW_PLAYLIST` | `ALARM_YELLOW` | piSignage playlist shown during a yellow alert (optional) |
    | `POLL_SECONDS` | `30` | Poll interval. UkraineAlarm rate-limits hard, so keep it at 30 or more. |
    | `PISIGNAGE_URL` | `http://127.0.0.1:3000` | piSignage server |

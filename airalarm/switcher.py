@@ -8,6 +8,7 @@ config when they reconnect.
 import json
 import logging
 import os
+import time
 
 log = logging.getLogger("airalarm")
 
@@ -17,19 +18,40 @@ ZONES = ("side", "bottom", "zone4", "zone5", "zone6")
 
 
 class Switcher:
-    def __init__(self, signage, state_path, playlists):
+    def __init__(self, signage, state_path, playlists, max_seconds=0,
+                 clock=time.monotonic):
         """playlists maps an alert level ("red", "yellow") to a playlist name.
 
         A playlist that does not exist on piSignage is skipped: the groups are
         left alone (or restored), so a missing playlist costs no deploys.
+
+        max_seconds caps how long the alarm playlist stays on for one alert
+        (0 means no cap). After that the groups are restored until the level
+        changes or the alert ends.
         """
         self.signage = signage
         self.state_path = state_path
         self.playlists = playlists
+        self.max_seconds = max_seconds
+        self.clock = clock
+        self._level = None
+        self._since = None
+        self._expired = False
 
     def apply(self, level):
         """Show the playlist for level ("red", "yellow"), or restore on None."""
         if level is None:
+            self._level = None
+            self._expired = False
+            return self._restore()
+        if level != self._level:
+            self._level = level
+            self._since = self.clock()
+            self._expired = False
+        if (not self._expired and self.max_seconds
+                and self.clock() - self._since >= self.max_seconds):
+            self._expired = True
+        if self._expired:
             return self._restore()
         name = self.playlists[level]
         try:

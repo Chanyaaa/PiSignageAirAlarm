@@ -95,6 +95,56 @@ class SwitcherTest(unittest.TestCase):
         self.assertEqual(self.signage.groups["g1"]["playlists"],
                          self.original["playlists"])
 
+    def switcher_with_limit(self, seconds, now):
+        return Switcher(self.signage, self.state,
+                        {"red": ALARM, "yellow": YELLOW},
+                        max_seconds=seconds, clock=lambda: now[0])
+
+    def test_alarm_goes_back_to_normal_after_max_seconds(self):
+        now = [0]
+        s = self.switcher_with_limit(30, now)
+        s.apply("red")
+        now[0] = 20
+        s.apply("red")
+        self.assertEqual(self.shown(), [ALARM])
+
+        now[0] = 31
+        s.apply("red")
+        self.assertEqual(self.signage.groups["g1"]["playlists"],
+                         self.original["playlists"])
+
+    def test_expired_alarm_stays_off_without_api_calls(self):
+        now = [0]
+        s = self.switcher_with_limit(30, now)
+        s.apply("red")
+        now[0] = 31
+        s.apply("red")
+        self.signage.api_calls.clear()
+
+        now[0] = 90
+        s.apply("red")
+        self.assertEqual(self.signage.api_calls, [])
+        self.assertEqual(self.signage.groups["g1"]["playlists"],
+                         self.original["playlists"])
+
+    def test_a_new_alert_after_all_clear_shows_the_alarm_again(self):
+        now = [0]
+        s = self.switcher_with_limit(30, now)
+        s.apply("red")
+        now[0] = 31
+        s.apply("red")
+        s.apply(None)
+        s.apply("red")
+        self.assertEqual(self.shown(), [ALARM])
+
+    def test_without_a_limit_the_alarm_stays_on(self):
+        now = [0]
+        s = self.switcher_with_limit(0, now)
+        s.apply("red")
+        now[0] = 10000
+        s.apply("red")
+        self.assertEqual(self.shown(), [ALARM])
+
     def test_yellow_without_a_yellow_playlist_keeps_normal_content(self):
         del self.signage.playlists[YELLOW]
         s = self.switcher()
