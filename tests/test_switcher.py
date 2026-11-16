@@ -33,16 +33,20 @@ class FakeSignage:
         }
         self.deploys = []
         self.fail_deploys = 0
+        self.api_calls = []
 
     def list_groups(self):
+        self.api_calls.append("list_groups")
         return copy.deepcopy(list(self.groups.values()))
 
     def get_playlist(self, name):
+        self.api_calls.append("get_playlist:" + name)
         if name not in self.playlists:
             raise LookupError(name)
         return copy.deepcopy(self.playlists[name])
 
     def deploy_group(self, group_id, playlists, assets):
+        self.api_calls.append("deploy_group")
         if self.fail_deploys:
             self.fail_deploys -= 1
             raise ConnectionError("piSignage down")
@@ -82,6 +86,14 @@ class SwitcherTest(unittest.TestCase):
 
         self.assertEqual(self.shown(), [YELLOW])
         self.assertIn("yellow.png", self.signage.groups["g1"]["assets"])
+
+    def test_red_without_a_red_playlist_skips_the_group_calls(self):
+        del self.signage.playlists[ALARM]
+        self.switcher().apply("red")
+
+        self.assertEqual(self.signage.api_calls, ["get_playlist:" + ALARM])
+        self.assertEqual(self.signage.groups["g1"]["playlists"],
+                         self.original["playlists"])
 
     def test_yellow_without_a_yellow_playlist_keeps_normal_content(self):
         del self.signage.playlists[YELLOW]
