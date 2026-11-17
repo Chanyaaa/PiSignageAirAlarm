@@ -3,7 +3,8 @@ services:
     build: .
     container_name: pisignage-airalarm
     restart: unless-stopped
-    network_mode: host          # reaches piSignage at 127.0.0.1:3000
+    extra_hosts:                # host.docker.internal = the Docker host, also on Linux
+      - host.docker.internal:host-gateway
     env_file: .env
     environment:
       - TZ=Europe/Kiev

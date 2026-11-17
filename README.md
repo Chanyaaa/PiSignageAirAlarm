@@ -36,7 +36,7 @@ The yellow playlist is optional. If `YELLOW_PLAYLIST` does not exist in piSignag
    | `ALARM_PLAYLIST` | `ALARM` | piSignage playlist shown during a red alert |
    | `YELLOW_PLAYLIST` | `ALARM_YELLOW` | piSignage playlist shown during a yellow alert (optional) |
    | `POLL_SECONDS` | `30` | Poll interval. UkraineAlarm rate-limits hard, so keep it at 30 or more. |
-   | `PISIGNAGE_URL` | `http://127.0.0.1:3000` | piSignage server |
+   | `PISIGNAGE_URL` | `http://host.docker.internal:3000` | piSignage server |
    | `PISIGNAGE_USER`, `PISIGNAGE_PASSWORD` | `pi`, `pi` | piSignage web UI login |
 
 3. Start it:
@@ -46,7 +46,7 @@ The yellow playlist is optional. If `YELLOW_PLAYLIST` does not exist in piSignag
    docker logs -f pisignage-airalarm
    ```
 
-   The compose file uses host networking, so `127.0.0.1:3000` is the piSignage server on the same machine.
+   Inside the container, `host.docker.internal` is the machine running Docker. If piSignage runs there, in Docker or not, it must listen on port 3000 on all interfaces, as `ports: "3000:3000"` does. If piSignage runs on another machine, set `PISIGNAGE_URL` to its LAN address.
 
 ## Manual switch
 
@@ -125,7 +125,7 @@ python -m unittest discover -s tests
    docker compose up -d --build
    ```
 
-The compose file uses host networking, which works only on Linux. On Windows or macOS (Docker Desktop), delete the `network_mode: host` line in `docker-compose.yml`. Then set `PISIGNAGE_URL` in `.env` to `http://host.docker.internal:3000` if piSignage runs on the same computer, or to the server's LAN address if it runs elsewhere.
+The same compose file works on Linux, Windows, and macOS: `host.docker.internal` reaches the Docker host on all of them.
 
 ## Limitations
 
