@@ -1,4 +1,6 @@
-"""Poll UkraineAlarm and switch piSignage groups to the red/yellow alarm playlist.
+"""Poll an alarm API and switch piSignage groups to the red/yellow alarm playlist.
+
+ALARM_API picks the source: "ukrainealarm" (default) or "alertsinua".
 
     python -m airalarm.main                # run forever
     python -m airalarm.main --set red      # show the red playlist now (manual test)
@@ -10,11 +12,19 @@ import logging
 import os
 import time
 
+from airalarm import alertsinua, ukrainealarm
 from airalarm.pisignage import PiSignage
 from airalarm.switcher import Switcher
-from airalarm.ukrainealarm import alert_level, fetch_region_alerts
 
 log = logging.getLogger("airalarm")
+
+# ALARM_API value -> (env var with the key, fetch(key, region), parse(response))
+APIS = {
+    "ukrainealarm": ("UKRAINEALARM_API_KEY", ukrainealarm.fetch_region_alerts,
+                     ukrainealarm.alert_level),
+    "alertsinua": ("ALERTSINUA_TOKEN", alertsinua.fetch_region_status,
+                   alertsinua.alert_level),
+}
 
 
 def env(name, default=None):
@@ -43,14 +53,18 @@ def main():
         log.info("applied %s", args.set)
         return
 
-    api_key = env("UKRAINEALARM_API_KEY")
+    api = env("ALARM_API", "ukrainealarm")
+    if api not in APIS:
+        raise SystemExit(f"ALARM_API must be one of {', '.join(APIS)}, got {api!r}")
+    key_var, fetch, parse = APIS[api]
+    api_key = env(key_var)
     region = env("REGION_ID")
     poll = int(env("POLL_SECONDS", "30"))
-    log.info("watching region %s every %ss", region, poll)
+    log.info("watching %s region %s every %ss", api, region, poll)
     last = "unknown"
     while True:
         try:
-            level = alert_level(fetch_region_alerts(api_key, region))
+            level = parse(fetch(api_key, region))
             if level != last:
                 log.info("alarm %s", (level or "off").upper())
             switcher.apply(level)

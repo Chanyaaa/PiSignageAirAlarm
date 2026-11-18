@@ -1,10 +1,10 @@
 # PiSignageAirAlarm
 
-Switches every [piSignage](https://github.com/colloqi/pisignage-server) player to an alarm playlist while an air-raid alert is active in a chosen Ukrainian region, and puts the previous playlists back after the all-clear. Alert data comes from the [UkraineAlarm API](https://api.ukrainealarm.com).
+Switches every [piSignage](https://github.com/colloqi/pisignage-server) player to an alarm playlist while an air-raid alert is active in a chosen Ukrainian region, and puts the previous playlists back after the all-clear. Alert data comes from the [UkraineAlarm API](https://api.ukrainealarm.com) or from [alerts.in.ua](https://devs.alerts.in.ua), chosen with `ALARM_API`.
 
 ## How it works
 
-Every `POLL_SECONDS` the service asks UkraineAlarm for the alerts in `REGION_ID`.
+Every `POLL_SECONDS` the service asks the chosen API for the alert level in `REGION_ID`.
 
 When an alert starts, it saves each piSignage group's playlists and asset list to `data/state.json`, then redeploys the group with only the alert's playlist: `ALARM_PLAYLIST` for a red alert, `YELLOW_PLAYLIST` for a yellow one. The group keeps its old assets, so players do not download them again after the alert. When the alert ends, it redeploys the saved playlists and deletes them from the state file.
 
@@ -12,16 +12,20 @@ The state is written before each deploy. If the service or the Pi restarts durin
 
 The service switches groups instead of sending players a playlist directly, because piSignage server's `/api/setplaylist` command never reaches players connected over WebSocket (player 5.x). A deployed group config also reaches players that were offline when the alert started, as soon as they reconnect.
 
-Any active alert type counts (air raid, artillery, and so on). The level comes from the alert's `activeAlertLevels` field in the API response. An alert is yellow only when all its levels are `Yellow`; an alert with no level or an unknown one is treated as red. If yellow and red alerts are active at once, the red playlist wins.
-
 An alert shows its playlist for one pass of it: the sum of its assets' `duration` values, in seconds. For example, two images with 10 seconds each give 20 seconds. After that the normal content comes back, even if the alert is still active, and stays until the level changes or the alert ends. A playlist without durations has no limit.
 
 The yellow playlist is optional. If `YELLOW_PLAYLIST` does not exist in piSignage, a yellow alert leaves the normal content on screen. When the level changes from yellow to red or back, the playlist changes on the next poll.
 
+## Alert sources
+
+`ukrainealarm` (default). Any active alert type counts (air raid, artillery, and so on). The level comes from the alert's `activeAlertLevels` field in the API response. An alert is yellow only when all its levels are `Yellow`; an alert with no level or an unknown one is treated as red. If yellow and red alerts are active at once, the red playlist wins.
+
+`alertsinua`. The service reads `GET /v2/iot/active_air_raid_alerts/{uid}.json`, which returns one letter: `R` for a red air-raid alert, `Y` for yellow, `P` when only part of the region is alerted, `N` for none. Only air-raid alerts count; artillery and street fighting do not. A hromada or raion also shows its oblast's alert. `P` is treated as no alert, because the screens may be outside the alerted part, so set `REGION_ID` to the uid of the hromada where the screens are. The uid table is at https://devs.alerts.in.ua. The API allows about 8 to 10 requests a minute per IP and blocks tokens that keep going over.
+
 ## Requirements
 
 - A running piSignage server reachable over HTTP.
-- A UkraineAlarm API key. Request one at https://api.ukrainealarm.com.
+- A UkraineAlarm API key (https://api.ukrainealarm.com) or an alerts.in.ua token (https://devs.alerts.in.ua).
 - Docker with Compose, or Python 3.10+ (standard library only).
 
 ## Setup
@@ -31,11 +35,13 @@ The yellow playlist is optional. If `YELLOW_PLAYLIST` does not exist in piSignag
 
    | Variable | Default | Meaning |
    |---|---|---|
-   | `UKRAINEALARM_API_KEY` | none | UkraineAlarm API key |
-   | `REGION_ID` | none | Region to watch. Look up its id in `GET /api/v3/regions` (send the API key in the `Authorization` header). |
+   | `ALARM_API` | `ukrainealarm` | Alert source: `ukrainealarm` or `alertsinua` |
+   | `UKRAINEALARM_API_KEY` | none | UkraineAlarm API key, for `ALARM_API=ukrainealarm` |
+   | `ALERTSINUA_TOKEN` | none | alerts.in.ua token, for `ALARM_API=alertsinua` |
+   | `REGION_ID` | none | Region to watch, as an id of the chosen API; the two number regions differently. UkraineAlarm: `GET /api/v3/regions` (send the API key in the `Authorization` header). alerts.in.ua: the uid table at https://devs.alerts.in.ua. |
    | `ALARM_PLAYLIST` | `ALARM` | piSignage playlist shown during a red alert |
    | `YELLOW_PLAYLIST` | `ALARM_YELLOW` | piSignage playlist shown during a yellow alert (optional) |
-   | `POLL_SECONDS` | `30` | Poll interval. UkraineAlarm rate-limits hard, so keep it at 30 or more. |
+   | `POLL_SECONDS` | `30` | Poll interval. Both APIs rate-limit hard, so keep it at 30 or more. |
    | `PISIGNAGE_URL` | `http://host.docker.internal:3000` | piSignage server |
    | `PISIGNAGE_USER`, `PISIGNAGE_PASSWORD` | `pi`, `pi` | piSignage web UI login |
 
@@ -97,7 +103,7 @@ Before you test, the piSignage server needs at least one group with a player, an
    docker logs -f pisignage-airalarm
    ```
 
-   Expect `watching region ... every 30s` and then `alarm OFF` or `alarm RED`, depending on the real alert state.
+   Expect `watching ukrainealarm region ... every 30s` (or `alertsinua`) and then `alarm OFF` or `alarm RED`, depending on the real alert state.
 
 Always finish a manual test with `--set off`. If you stop in the middle, the groups keep the alarm playlist until the service sees the end of the alert.
 
@@ -117,7 +123,7 @@ python -m unittest discover -s tests
    cp .env.example .env
    ```
 
-   Fill in `UKRAINEALARM_API_KEY`, `REGION_ID`, and `PISIGNAGE_PASSWORD` in `.env`.
+   Fill in `ALARM_API`, its key (`UKRAINEALARM_API_KEY` or `ALERTSINUA_TOKEN`), `REGION_ID`, and `PISIGNAGE_PASSWORD` in `.env`.
 
 4. Start the service and follow the steps in [Test it step by step](#test-it-step-by-step).
 
